@@ -49,6 +49,23 @@ gate: FAIL - significant regression: 7 regressed vs 0 fixed (McNemar p=0.0156 < 
 
 `candidate_stable.jsonl` swaps one case each way and passes (p=1.0).
 
+## Flaky cases
+
+Pass `--repeat` (once per extra run) with more runs of the same candidate.
+A case whose outcome differs between those runs is excluded from the
+comparison and reported:
+
+```text
+$ python3 -m evalgate fixtures/baseline.jsonl fixtures/candidate_stable.jsonl --repeat fixtures/candidate_stable_repeat.jsonl
+cases:      19
+...
+flaky:      case-06 (excluded)
+gate: PASS
+```
+
+A flaky case that is also listed in `--must-pass` fails the gate, so
+excluding it never removes a guard.
+
 ## Design notes
 
 - Runs must cover exactly the same case ids; a dropped case is an error, not
