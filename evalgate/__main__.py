@@ -5,6 +5,7 @@ import sys
 from pathlib import Path
 
 from .compare import Comparison, compare
+from .flaky import find_flaky
 from .gate import DEFAULT_ALPHA, evaluate
 from .results import ResultsError, load_results
 
@@ -36,6 +37,13 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("baseline", type=Path)
     parser.add_argument("candidate", type=Path)
     parser.add_argument("--must-pass", type=Path, help="file of case ids that must not regress")
+    parser.add_argument(
+        "--repeat",
+        type=Path,
+        action="append",
+        default=[],
+        help="extra run of the same candidate; cases that flip across runs are excluded",
+    )
     parser.add_argument("--alpha", type=float, default=DEFAULT_ALPHA)
     parser.add_argument("--seed", type=int, default=0, help="bootstrap seed")
     args = parser.parse_args(argv)
@@ -47,13 +55,24 @@ def main(argv: list[str] | None = None) -> int:
         unknown = sorted(must_pass - set(baseline))
         if unknown:
             raise ResultsError(f"must-pass ids not in the run: {', '.join(unknown)}")
-        comparison = compare(baseline, candidate, seed=args.seed)
+        flaky: tuple[str, ...] = ()
+        if args.repeat:
+            repeats = [load_results(path) for path in args.repeat]
+            flaky = find_flaky([candidate, *repeats])
+        # Flaky cases say nothing about the change, so they stay out of McNemar.
+        comparison = compare(
+            {i: r for i, r in baseline.items() if i not in flaky},
+            {i: r for i, r in candidate.items() if i not in flaky},
+            seed=args.seed,
+        )
     except (ResultsError, OSError) as exc:
         print(f"error: {exc}", file=sys.stderr)
         return EXIT_BAD_INPUT
 
     print(format_report(comparison))
-    verdict = evaluate(comparison, must_pass=must_pass, alpha=args.alpha)
+    if flaky:
+        print(f"flaky:      {', '.join(flaky)} (excluded)")
+    verdict = evaluate(comparison, must_pass=must_pass, alpha=args.alpha, flaky=frozenset(flaky))
     if verdict.passed:
         print("gate: PASS")
         return EXIT_OK
