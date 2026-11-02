@@ -8,6 +8,7 @@ from evalgate.__main__ import EXIT_BAD_INPUT, EXIT_OK, EXIT_REGRESSION, main
 FIXTURES = Path(__file__).resolve().parent.parent / "fixtures"
 BASELINE = str(FIXTURES / "baseline.jsonl")
 MUST_PASS = str(FIXTURES / "must_pass.txt")
+STABLE = str(FIXTURES / "candidate_stable.jsonl")
 
 
 def run(*args: str) -> tuple[int, str, str]:
@@ -44,6 +45,26 @@ class CliTest(unittest.TestCase):
 
     def test_same_run_passes(self):
         self.assertEqual(run(BASELINE, BASELINE)[0], EXIT_OK)
+
+    def test_flaky_case_is_excluded_and_reported(self):
+        code, out, _ = run(
+            BASELINE, STABLE, "--repeat", str(FIXTURES / "candidate_stable_repeat.jsonl")
+        )
+        self.assertEqual(code, EXIT_OK)
+        self.assertIn("flaky:      case-06 (excluded)", out)
+        self.assertIn("cases:      19", out)
+
+    def test_flaky_must_pass_case_fails_the_gate(self):
+        code, out, _ = run(
+            BASELINE,
+            STABLE,
+            "--must-pass",
+            MUST_PASS,
+            "--repeat",
+            str(FIXTURES / "candidate_stable_repeat_must_pass.jsonl"),
+        )
+        self.assertEqual(code, EXIT_REGRESSION)
+        self.assertIn("must-pass cases are flaky: case-02", out)
 
 
 if __name__ == "__main__":

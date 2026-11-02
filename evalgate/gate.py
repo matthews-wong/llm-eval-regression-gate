@@ -18,8 +18,14 @@ def evaluate(
     *,
     must_pass: frozenset[str] = frozenset(),
     alpha: float = DEFAULT_ALPHA,
+    flaky: frozenset[str] = frozenset(),
 ) -> Verdict:
     reasons: list[str] = []
+
+    # Excluding a flaky must-pass case would silently drop the guard on it.
+    unstable = sorted(must_pass.intersection(flaky))
+    if unstable:
+        reasons.append(f"must-pass cases are flaky: {', '.join(unstable)}")
 
     pinned = sorted(must_pass.intersection(comparison.regressed))
     if pinned:
